@@ -12,3 +12,14 @@ exports.login = (req, res) => {
         message: "Login successful."
     });
 };
+exports.registerSchool = (req, res) => {
+
+    res.json({
+
+        success: true,
+
+        message: "School registration controller ready."
+
+    });
+
+};
