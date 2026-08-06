@@ -1,7 +1,73 @@
-
 const Result = require('../models/Result');
 
-// 1. Check Result Availability & Payment Status
+// 1. Upload or Add New Result (Admin / Teacher endpoint)
+exports.uploadResult = async (req, res) => {
+    try {
+        const {
+            studentId,
+            studentName,
+            schoolId,
+            academicSession,
+            term,
+            classLevel,
+            subjects,
+            accessFee
+        } = req.body;
+
+        // Calculate total, average, and grades automatically
+        let totalMarks = 0;
+        const processedSubjects = subjects.map(sub => {
+            const total = (Number(sub.caScore) || 0) + (Number(sub.examScore) || 0);
+            totalMarks += total;
+
+            let grade = 'F';
+            if (total >= 70) grade = 'A';
+            else if (total >= 60) grade = 'B';
+            else if (total >= 50) grade = 'C';
+            else if (total >= 45) grade = 'D';
+            else if (total >= 40) grade = 'E';
+
+            return {
+                subjectName: sub.subjectName,
+                caScore: sub.caScore,
+                examScore: sub.examScore,
+                totalScore: total,
+                grade: grade
+            };
+        });
+
+        const averageScore = processedSubjects.length > 0 
+            ? (totalMarks / processedSubjects.length).toFixed(2) 
+            : 0;
+
+        // Save or update existing result record
+        const newResult = await Result.findOneAndUpdate(
+            { studentId, academicSession, term },
+            {
+                studentName,
+                schoolId,
+                classLevel,
+                subjects: processedSubjects,
+                totalMarksObtained: totalMarks,
+                averageScore: Number(averageScore),
+                accessFee: accessFee || 1000
+            },
+            { new: true, upsert: true }
+        );
+
+        return res.status(201).json({
+            success: true,
+            message: "Result uploaded successfully!",
+            data: newResult
+        });
+
+    } catch (error) {
+        console.error("Error uploading result:", error);
+        return res.status(500).json({ success: false, message: "Server error during upload." });
+    }
+};
+
+// 2. Check Result Status (Student Search)
 exports.checkResultStatus = async (req, res) => {
     try {
         const { studentId, academicSession, term } = req.body;
@@ -15,7 +81,6 @@ exports.checkResultStatus = async (req, res) => {
             });
         }
 
-        // If access fee is paid, return full result breakdown
         if (result.hasPaid) {
             return res.status(200).json({
                 success: true,
@@ -25,7 +90,6 @@ exports.checkResultStatus = async (req, res) => {
             });
         }
 
-        // If unpaid, return limited info requiring payment initiation
         return res.status(200).json({
             success: true,
             paid: false,
@@ -45,12 +109,12 @@ exports.checkResultStatus = async (req, res) => {
     }
 };
 
-// 2. Unlock Result After Payment Confirmation
+// 3. Confirm Payment and Unlock Detailed Result
 exports.verifyResultPayment = async (req, res) => {
     try {
-        const { studentId, academicSession, term, transactionReference } = req.body;
+        const { studentId, academicSession, term, reference } = req.body;
 
-        // In a live app, verify transactionReference with Paystack/Flutterwave API here
+        // Note: You can add Paystack / Flutterwave API verification here using the reference
 
         const result = await Result.findOneAndUpdate(
             { studentId, academicSession, term },
@@ -64,7 +128,7 @@ exports.verifyResultPayment = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: "Payment verified successfully! Access granted.",
+            message: "Payment verified successfully!",
             data: result
         });
 
