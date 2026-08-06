@@ -1,1 +1,75 @@
 
+const Result = require('../models/Result');
+
+// 1. Check Result Availability & Payment Status
+exports.checkResultStatus = async (req, res) => {
+    try {
+        const { studentId, academicSession, term } = req.body;
+
+        const result = await Result.findOne({ studentId, academicSession, term });
+
+        if (!result) {
+            return res.status(404).json({
+                success: false,
+                message: "No exam record found for the provided details."
+            });
+        }
+
+        // If access fee is paid, return full result breakdown
+        if (result.hasPaid) {
+            return res.status(200).json({
+                success: true,
+                paid: true,
+                message: "Result retrieved successfully.",
+                data: result
+            });
+        }
+
+        // If unpaid, return limited info requiring payment initiation
+        return res.status(200).json({
+            success: true,
+            paid: false,
+            message: "Payment required to view detailed scores.",
+            summary: {
+                studentId: result.studentId,
+                studentName: result.studentName,
+                academicSession: result.academicSession,
+                term: result.term,
+                accessFee: result.accessFee
+            }
+        });
+
+    } catch (error) {
+        console.error("Error checking result status:", error);
+        return res.status(500).json({ success: false, message: "Server error." });
+    }
+};
+
+// 2. Unlock Result After Payment Confirmation
+exports.verifyResultPayment = async (req, res) => {
+    try {
+        const { studentId, academicSession, term, transactionReference } = req.body;
+
+        // In a live app, verify transactionReference with Paystack/Flutterwave API here
+
+        const result = await Result.findOneAndUpdate(
+            { studentId, academicSession, term },
+            { hasPaid: true },
+            { new: true }
+        );
+
+        if (!result) {
+            return res.status(404).json({ success: false, message: "Result record not found." });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Payment verified successfully! Access granted.",
+            data: result
+        });
+
+    } catch (error) {
+        console.error("Error verifying payment:", error);
+        return res.status(500).json({ success: false, message: "Server error." });
+    }
+};
